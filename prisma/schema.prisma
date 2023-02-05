@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id       String    @id @default(uuid())
+  title    String
+  body     String
+  comments Comment[]
+}
+
+model User {
+  id       String    @id @default(uuid())
+  name     String
+  comments Comment[]
+  // Like     Like[]
+  likes    Like[]
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  message   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade) // when delete user, delete comments as well
+  userId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  // parent    Comment?  @relation(fields: [commentId], references: [id])
+  parent    Comment?  @relation("ParentChild", fields: [parentId], references: [id], onDelete: Cascade) // parent is pointing toward array of children/Comment[] inside of comment
+  // Comment   Comment[]
+  children  Comment[] @relation("ParentChild")
+  // commentId String?
+  parentId  String?
+  // Like      Like[]
+  likes     Like[]
+}
+
+model Like {
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade) // when delete user or comment -> delete likes
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  commentId String
+
+  // jointId, because user can only like 1 time
+  @@id([userId, commentId])
+}
