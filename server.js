@@ -112,6 +112,7 @@ app.post('/posts/:id/comments', async (req, res) => {
   )
 })
 
+// Edit comment
 // app.patch('/posts/:postId/comments/:commentId', async (req, res) => {
 app.put('/posts/:postId/comments/:commentId', async (req, res) => {
   console.log('update comment')
@@ -138,6 +139,31 @@ app.put('/posts/:postId/comments/:commentId', async (req, res) => {
   )
 })
 
+// Delete comment
+app.delete('/posts/:postId/comments/:commentId', async (req, res) => {
+  console.log('delete comment')
+
+  // get user id and compare it with logged in cookie
+  const { userId } = await prisma.comment.findUnique({
+    where: { id: req.params.commentId },
+    select: { userId: true },
+  })
+  if (userId !== req.cookies.userId) {
+    return res.send(
+      app.httpErrors.unauthorized('You do not have permission to edit this message')
+    )
+  }
+
+  return await commitToDb(
+    prisma.comment.delete({
+      where: { id: req.params.commentId },
+      select: { id: true }, // returns the ID of the deleted comment
+    })
+  )
+})
+
+// Helper functions
+// Handle the result of a promise, return either the data or an HTTP error
 async function commitToDb(promise) {
   // const { error, data } = await app.to(promise)
   const [error, data] = await app.to(promise)
