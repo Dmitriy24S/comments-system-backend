@@ -47,13 +47,12 @@ const COMMENT_SELECT_FIELDS = {
 }
 
 app.get('/posts', async (req, res) => {
-  //   return await prisma.post.findMany({
-  //     select: {
-  //       id: true,
-  //       title: true,
-  //     },
-  //   })
-
+  // return await prisma.post.findMany({
+  //    select: {
+  //      id: true,
+  //      title: true,
+  //    },
+  // })
   return await commitToDb(
     prisma.post.findMany({
       select: {
@@ -76,18 +75,18 @@ app.get('/posts/:id', async (req, res) => {
             createdAt: 'desc',
           },
           select: COMMENT_SELECT_FIELDS,
-          //   select: {
-          //     id: true,
-          //     message: true,
-          //     parentId: true,
-          //     createdAt: true,
-          //     user: {
-          //       select: {
-          //         id: true,
-          //         name: true,
-          //       },
+          // select: {
+          //   id: true,
+          //   message: true,
+          //   parentId: true,
+          //   createdAt: true,
+          //   user: {
+          //     select: {
+          //       id: true,
+          //       name: true,
           //     },
           //   },
+          // },
         },
       },
     })
@@ -109,6 +108,32 @@ app.post('/posts/:id/comments', async (req, res) => {
         postId: req.params.id,
       },
       select: COMMENT_SELECT_FIELDS,
+    })
+  )
+})
+
+// app.patch('/posts/:postId/comments/:commentId', async (req, res) => {
+app.put('/posts/:postId/comments/:commentId', async (req, res) => {
+  console.log('update comment')
+  if (req.body.message === '' || req.body.message === null) {
+    return res.send(app.httpErrors.badRequest('Message is required'))
+  }
+  // get userId from comment in DB
+  const { userId } = await prisma.comment.findUnique({
+    where: { id: req.params.commentId },
+    select: { userId: true },
+  })
+  if (userId !== req.cookies.userId) {
+    return res.send(
+      app.httpErrors.unauthorized('You do not have permission to edit this message')
+    )
+  }
+
+  return await commitToDb(
+    prisma.comment.update({
+      where: { id: req.params.commentId },
+      data: { message: req.body.message },
+      select: { message: true },
     })
   )
 })
