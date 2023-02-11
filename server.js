@@ -46,6 +46,7 @@ const COMMENT_SELECT_FIELDS = {
   },
 }
 
+// Get/show all posts
 app.get('/posts', async (req, res) => {
   // return await prisma.post.findMany({
   //    select: {
@@ -63,36 +64,127 @@ app.get('/posts', async (req, res) => {
   )
 })
 
+// Get/show single post info with comments, etc.
 app.get('/posts/:id', async (req, res) => {
   return await commitToDb(
-    prisma.post.findUnique({
-      where: { id: req.params.id },
-      select: {
-        body: true,
-        title: true,
-        comments: {
-          orderBy: {
-            createdAt: 'desc',
+    prisma.post
+      .findUnique({
+        where: { id: req.params.id },
+        select: {
+          body: true,
+          title: true,
+          comments: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            // select: {
+            //   id: true,
+            //   message: true,
+            //   parentId: true,
+            //   createdAt: true,
+            //   user: {
+            //     select: {
+            //       id: true,
+            //       name: true,
+            //     },
+            //   },
+            // },
+            // select: COMMENT_SELECT_FIELDS,
+            select: {
+              ...COMMENT_SELECT_FIELDS,
+              _count: {
+                select: {
+                  likes: true,
+                },
+              },
+            },
           },
-          select: COMMENT_SELECT_FIELDS,
-          // select: {
-          //   id: true,
-          //   message: true,
-          //   parentId: true,
-          //   createdAt: true,
-          //   user: {
-          //     select: {
-          //       id: true,
-          //       name: true,
-          //     },
-          //   },
-          // },
         },
-      },
-    })
+      })
+      .then(async (post) => {
+        // console.log('post', post)
+        // get logged in users likes/liked comments from current post
+        const likes = await prisma.like.findMany({
+          where: {
+            userId: req.cookies.userId,
+            commentId: { in: post.comments.map((comment) => comment.id) },
+          },
+        })
+        // console.log('likes', likes)
+        // likes [
+        //   {
+        //     userId: 'a22cafa5-5a53-4ddf-ab0b-1cf5decdf48c',
+        //     commentId: '61910d17-b615-429c-add5-24228865a0da'
+        //   },
+        //   {
+        //     userId: 'a22cafa5-5a53-4ddf-ab0b-1cf5decdf48c',
+        //     commentId: '3dcb0391-c0e9-4806-aa73-4454b019b987'
+        //   }
+        // ]
+
+        const postData = {
+          ...post,
+          // add 2 extra fields to posts comments object for likes info
+          comments: post.comments.map((comment) => {
+            const { _count, ...commentFields } = comment
+            // console.log('_count', _count)
+            // _count { likes: 1 }
+
+            // console.log('commentFields', commentFields)
+            // commentFields {
+            //   id: '3dcb0391-c0e9-4806-aa73-4454b019b987',
+            //   message: 'test1',
+            //   parentId: null,
+            //   createdAt: 2023-02-07T13:20:41.330Z,
+            //   user: { id: 'a22cafa5-5a53-4ddf-ab0b-1cf5decdf48c', name: 'Kyle' }
+            // }
+
+            return {
+              // normal old post info
+              ...commentFields,
+              // 2 additional fields for likes info
+              likedByMe: likes.find((like) => like.commentId === comment.id),
+              likeCount: _count.likes,
+            }
+          }),
+        }
+        // console.log('postData', postData)
+        // {
+        //   id: '626b37de-5543-4268-b815-b573d6d83f1c',
+        //   message: 'reply1',
+        //   parentId: '3dcb0391-c0e9-4806-aa73-4454b019b987',
+        //   createdAt: 2023-02-08T10:28:12.638Z,
+        //   user: [Object],
+        //   likedByMe: undefined,
+        //   likeCount: 0
+        // },
+        // {
+        //   id: '61910d17-b615-429c-add5-24228865a0da',
+        //   message: 'test2 w/ edit',
+        //   parentId: null,
+        //   createdAt: 2023-02-07T15:27:56.064Z,
+        //   user: [Object],
+        //   likedByMe: undefined,
+        //   likeCount: 0
+        // },
+
+        return postData
+        // return {
+        //   ...post,
+        //   comments: post.comments.map((comment) => {
+        //     const { _count, ...commentFields } = comment
+        //     return {
+        //       ...commentFields,
+        //       likedByMe: likes.find((like) => like.commentId === comment.id),
+        //       likeCount: _count.likes,
+        //     }
+        //   }),
+        // }
+      })
   )
 })
 
+// Create comment
 app.post('/posts/:id/comments', async (req, res) => {
   console.log('body msg?:', req.body.message)
   if (req.body.message === '' || req.body.message === null) {
@@ -100,15 +192,24 @@ app.post('/posts/:id/comments', async (req, res) => {
   }
 
   return await commitToDb(
-    prisma.comment.create({
-      data: {
-        message: req.body.message,
-        userId: req.cookies.userId,
-        parentId: req.body.parentId,
-        postId: req.params.id,
-      },
-      select: COMMENT_SELECT_FIELDS,
-    })
+    prisma.comment
+      .create({
+        data: {
+          message: req.body.message,
+          userId: req.cookies.userId,
+          parentId: req.body.parentId,
+          postId: req.params.id,
+        },
+        select: COMMENT_SELECT_FIELDS,
+      })
+      .then((comment) => {
+        // return/create comment + with 0 likes and initially not liked
+        return {
+          ...comment,
+          likeCount: 0,
+          likedByMe: false,
+        }
+      })
   )
 })
 
@@ -162,6 +263,46 @@ app.delete('/posts/:postId/comments/:commentId', async (req, res) => {
   )
 })
 
+// Like comment
+app.post('/posts/:postId/comments/:commentId/toggleLike', async (req, res) => {
+  console.log('like comment')
+
+  const data = {
+    commentId: req.params.commentId,
+    userId: req.cookies.userId,
+  }
+  // console.log('like comment data:', data)
+  // like comment data: {
+  //   commentId: '61910d17-b615-429c-add5-24228865a0da',
+  //   userId: 'a22cafa5-5a53-4ddf-ab0b-1cf5decdf48c'
+  // }
+  const like = await prisma.like.findUnique({
+    where: { userId_commentId: data },
+  })
+  // console.log('like comment like:', like)
+  // like comment like: null
+
+  if (like === null) {
+    return await commitToDb(prisma.like.create({ data })).then(() => {
+      console.log('like comment')
+      return { addLike: true }
+    })
+  } else {
+    return await commitToDb(
+      prisma.like.delete({
+        where: {
+          userId_commentId: data,
+        },
+      })
+    ).then(() => {
+      console.log('unlike comment')
+      return {
+        addLike: false,
+      }
+    })
+  }
+})
+
 // Helper functions
 // Handle the result of a promise, return either the data or an HTTP error
 async function commitToDb(promise) {
@@ -171,4 +312,5 @@ async function commitToDb(promise) {
   return data
 }
 
+// Start server
 app.listen({ port: process.env.PORT })
