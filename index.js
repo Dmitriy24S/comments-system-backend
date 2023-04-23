@@ -9,8 +9,8 @@ dotenv.config()
 const app = fastify()
 app.register(cors, {
   origin: process.env.CLIENT_URL,
-  // credentials: true,
-  credentials: false,
+  credentials: true,
+  // credentials: false,
 })
 app.register(sensible)
 app.register(cookie, {
