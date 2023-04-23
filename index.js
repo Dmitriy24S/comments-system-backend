@@ -21,7 +21,7 @@ app.addHook('onRequest', (req, res, done) => {
   if (req.cookies.userId !== CURRENT_USER_ID) {
     req.cookies.userId = CURRENT_USER_ID
     res.clearCookie('userId')
-    res.setCookie('userId', CURRENT_USER_ID, { SameSite: None })
+    res.setCookie('userId', CURRENT_USER_ID, { SameSite: 'none' })
   }
   done()
   // -> fake that we are logged in
