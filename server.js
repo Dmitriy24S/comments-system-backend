@@ -313,4 +313,4 @@ async function commitToDb(promise) {
 }
 
 // Start server
-app.listen({ port: process.env.PORT })
+app.listen({ port: process.env.PORT || 3000 })
