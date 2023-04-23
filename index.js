@@ -10,16 +10,18 @@ const app = fastify()
 app.register(cors, {
   origin: process.env.CLIENT_URL,
   credentials: true,
+  // credentials: false,
 })
 app.register(sensible)
 app.register(cookie, {
   secret: process.env.COOKIE_SECRET,
+  // SameSite: None,
 })
 app.addHook('onRequest', (req, res, done) => {
   if (req.cookies.userId !== CURRENT_USER_ID) {
     req.cookies.userId = CURRENT_USER_ID
     res.clearCookie('userId')
-    res.setCookie('userId', CURRENT_USER_ID)
+    res.setCookie('userId', CURRENT_USER_ID, { SameSite: 'none' })
   }
   done()
   // -> fake that we are logged in
