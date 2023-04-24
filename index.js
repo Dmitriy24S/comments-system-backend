@@ -6,22 +6,31 @@ import dotenv from 'dotenv'
 import fastify from 'fastify'
 dotenv.config()
 
-const app = fastify()
+// const app = fastify()
+const app = fastify({ trustProxy: true, sameSite: 'none', secure: true })
 app.register(cors, {
   origin: process.env.CLIENT_URL,
   credentials: true,
   // credentials: false,
+  sameSite: 'none',
+  secure: true,
 })
 app.register(sensible)
 app.register(cookie, {
   secret: process.env.COOKIE_SECRET,
   // SameSite: None,
+  sameSite: 'none',
+  secure: true,
 })
 app.addHook('onRequest', (req, res, done) => {
   if (req.cookies.userId !== CURRENT_USER_ID) {
     req.cookies.userId = CURRENT_USER_ID
-    res.clearCookie('userId')
-    res.setCookie('userId', CURRENT_USER_ID, { SameSite: 'none' })
+    res.clearCookie('userId', { sameSite: 'none' })
+    res.setCookie('userId', CURRENT_USER_ID, {
+      sameSite: 'none', // ! no?
+      // sameSite: 'lax',
+      secure: true,
+    })
   }
   done()
   // -> fake that we are logged in
